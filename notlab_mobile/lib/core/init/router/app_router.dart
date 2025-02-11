@@ -1,7 +1,6 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:notlab/core/init/router/app_router.gr.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:notlab/features/home/presentation/pages/home_page.dart';
 
 part 'app_router.g.dart';
 
