@@ -1,0 +1,32 @@
+lib/
+├── core/
+│   ├── constants/
+│   │   ├── app_constants.dart
+│   │   └── enums/
+│   ├── extensions/
+│   ├── init/
+│   │   ├── app_init.dart
+│   │   ├── router/
+│   │   │   ├── app_router.dart
+│   │   │   └── app_router.gr.dart
+│   │   └── theme/
+│   ├── utils/
+│   └── widgets/
+├── features/
+│   ├── auth/
+│   │   ├── data/
+│   │   ├── domain/
+│   │   └── presentation/
+│   ├── course/
+│   │   ├── data/
+│   │   ├── domain/
+│   │   └── presentation/
+│   ├── achievement/
+│   │   ├── data/
+│   │   ├── domain/
+│   │   └── presentation/
+│   └── group/
+│       ├── data/
+│       ├── domain/
+│       └── presentation/
+└── main.dart 
