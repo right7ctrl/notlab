@@ -189,7 +189,11 @@ function SortableSubject({ subject, onShowUnits }: { subject: Subject, onShowUni
 }
 
 // SortableTopic komponenti
-function SortableTopic({ topic, onEdit }: { topic: Topic, onEdit: (topic: Topic) => void }) {
+function SortableTopic({ topic, onEdit, onDelete }: {
+    topic: Topic,
+    onEdit: (topic: Topic) => void,
+    onDelete: (topic: Topic) => void
+}) {
     const {
         attributes,
         listeners,
@@ -232,9 +236,10 @@ function SortableTopic({ topic, onEdit }: { topic: Topic, onEdit: (topic: Topic)
                         <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            /* Silme modalını aç */
+                        onClick={() => {
+                            if (window.confirm('Bu konuyu silmek istediğinize emin misiniz?')) {
+                                onDelete(topic)
+                            }
                         }}
                         className="p-1 text-gray-500 hover:text-red-600"
                     >
@@ -558,17 +563,17 @@ export default function CurriculumManagement() {
         }
     }
 
-    const handleAddTopic = async () => {
+    const handleAddTopic = async (name: string, content: string) => {
         try {
             setIsSubmitting(true)
 
             const { error } = await supabase
                 .from('topics')
                 .insert([{
-                    name: newTopic.name,
+                    name: name.trim(),
                     unit_id: selectedUnit?.id,
-                    order_number: newTopic.order_number,
-                    content: newTopic.content
+                    order_number: topics.length + 1,
+                    content: content || ''
                 }])
 
             if (error) throw error
@@ -697,6 +702,39 @@ export default function CurriculumManagement() {
             alert('Konu güncellenirken bir hata oluştu')
         } finally {
             setIsSubmitting(false)
+        }
+    }
+
+    const handleDeleteTopic = async (topic: Topic) => {
+        try {
+            const { error } = await supabase
+                .from('topics')
+                .delete()
+                .eq('id', topic.id)
+
+            if (error) throw error
+
+            // Konuları yeniden yükle ve sıra numaralarını güncelle
+            const { data: remainingTopics } = await supabase
+                .from('topics')
+                .select('*')
+                .eq('unit_id', selectedUnit?.id)
+                .order('order_number')
+
+            if (remainingTopics) {
+                // Sıra numaralarını güncelle
+                const updatedTopics = remainingTopics.map((topic, index) => ({
+                    ...topic,
+                    order_number: index + 1
+                }))
+
+                setTopics(updatedTopics)
+                // Sıra numaralarını veritabanında güncelle
+                updateTopicsOrder(updatedTopics)
+            }
+        } catch (error) {
+            console.error('Konu silinirken hata:', error)
+            alert('Konu silinirken bir hata oluştu')
         }
     }
 
@@ -880,6 +918,7 @@ export default function CurriculumManagement() {
                                                     setEditingTopic(topic)
                                                     setShowTopicModal(true)
                                                 }}
+                                                onDelete={handleDeleteTopic}
                                             />
                                         ))}
                                     </div>
@@ -1040,6 +1079,14 @@ const TopicModal = ({
     const [name, setName] = useState(topic?.name || '')
     const [content, setContent] = useState(topic?.content || '')
 
+    const handleSave = () => {
+        if (!name.trim()) {
+            alert('Konu adı boş olamaz')
+            return
+        }
+        onSave(name, content)
+    }
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-4xl h-[80vh] overflow-y-auto">
@@ -1082,8 +1129,8 @@ const TopicModal = ({
                             İptal
                         </button>
                         <button
-                            onClick={() => onSave(name, content)}
-                            disabled={!name || isSubmitting}
+                            onClick={handleSave}
+                            disabled={!name.trim() || isSubmitting}
                             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
