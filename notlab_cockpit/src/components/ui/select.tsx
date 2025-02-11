@@ -1,14 +1,16 @@
-import * as React from "react"
-import { cn } from "@/lib/utils"
+'use client'
 
-export interface SelectProps
-    extends React.SelectHTMLAttributes<HTMLSelectElement> {
-    error?: string
+import { forwardRef } from 'react'
+import { cn } from '@/lib/utils'
+
+export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
     label?: string
+    error?: string
+    options: { value: string; label: string }[]
 }
 
-const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
-    ({ className, error, label, children, ...props }, ref) => {
+const Select = forwardRef<HTMLSelectElement, SelectProps>(
+    ({ className, label, error, options, ...props }, ref) => {
         return (
             <div className="w-full">
                 {label && (
@@ -18,14 +20,17 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
                 )}
                 <select
                     className={cn(
-                        "w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all text-gray-900",
-                        error && "border-red-500 focus:border-red-500 focus:ring-red-200",
+                        "flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50",
                         className
                     )}
                     ref={ref}
                     {...props}
                 >
-                    {children}
+                    {options.map((option) => (
+                        <option key={option.value} value={option.value}>
+                            {option.label}
+                        </option>
+                    ))}
                 </select>
                 {error && (
                     <p className="mt-1 text-sm text-red-600">{error}</p>
@@ -34,6 +39,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         )
     }
 )
-Select.displayName = "Select"
+
+Select.displayName = 'Select'
 
 export { Select } 

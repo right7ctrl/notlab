@@ -8,6 +8,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { AdminSidebar } from '@/components/admin/sidebar'
 
 type Grade = {
     id: string
@@ -739,193 +740,194 @@ export default function CurriculumManagement() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Header */}
-            <div className="bg-white shadow">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between h-16">
-                        <div className="flex items-center">
-                            <button
-                                onClick={() => router.back()}
-                                className="text-gray-500 hover:text-gray-700 p-2"
-                            >
-                                <ArrowLeft className="h-6 w-6" />
-                            </button>
-                            <h1 className="ml-3 text-2xl font-bold text-gray-900">Müfredat Yönetimi</h1>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div className="flex min-h-screen bg-gray-50">
+            <AdminSidebar />
 
-            {/* Main Content */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="space-y-6">
-                    {/* Üst Panel - Sınıf, Ders ve Üniteler */}
+            <div className="flex-1">
+                {/* Header */}
+                <div className="h-16 bg-white border-b px-8 flex items-center">
+                    <h1 className="text-xl font-semibold text-gray-900">Müfredat Yönetimi</h1>
+                </div>
+
+                {/* Main Content */}
+                <div className="p-8">
                     <div className="grid grid-cols-12 gap-6">
                         {/* Sol Panel - Sınıflar */}
-                        <div className="col-span-2 bg-white rounded-lg shadow p-4">
-                            <h2 className="font-semibold text-gray-900 mb-4">Sınıflar</h2>
-                            <div className="space-y-2">
-                                {grades.map((grade) => (
-                                    <button
-                                        key={grade.id}
-                                        onClick={() => {
-                                            setSelectedGrade(grade)
-                                            setSelectedSubject(null)
-                                            setSelectedUnit(null)
-                                        }}
-                                        className={`w-full text-left px-3 py-2 rounded-md transition-colors ${selectedGrade?.id === grade.id
-                                            ? 'bg-blue-100 text-blue-800 font-medium'
-                                            : 'text-gray-700 hover:bg-gray-50'
-                                            }`}
-                                    >
-                                        {grade.name}
-                                    </button>
-                                ))}
+                        <div className="col-span-2">
+                            <div className="bg-white rounded-lg shadow-sm border">
+                                <div className="p-4 border-b">
+                                    <h2 className="font-semibold text-gray-900">Sınıflar</h2>
+                                </div>
+                                <div className="p-2">
+                                    {grades.map((grade) => (
+                                        <button
+                                            key={grade.id}
+                                            onClick={() => {
+                                                setSelectedGrade(grade)
+                                                setSelectedSubject(null)
+                                                setSelectedUnit(null)
+                                            }}
+                                            className={`w-full text-left px-3 py-2 rounded-md ${selectedGrade?.id === grade.id
+                                                    ? 'bg-blue-50 text-blue-700 font-medium'
+                                                    : 'text-gray-600 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            {grade.name}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
                         {/* Orta Panel - Dersler */}
-                        <div className="col-span-3 bg-white rounded-lg shadow p-4">
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="font-semibold text-gray-900">
-                                    {selectedGrade ? `${selectedGrade.name} Dersleri` : 'Dersler'}
-                                </h2>
-                                {selectedGrade && (
-                                    <button
-                                        onClick={() => setShowSubjectModal(true)}
-                                        className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-md"
-                                    >
-                                        <Plus className="h-5 w-5" />
-                                    </button>
-                                )}
-                            </div>
-                            {selectedGrade ? (
-                                <DndContext
-                                    sensors={sensors}
-                                    collisionDetection={closestCenter}
-                                    onDragEnd={handleSubjectDragEnd}
-                                >
-                                    <SortableContext
-                                        items={subjects.map(subject => subject.id)}
-                                        strategy={verticalListSortingStrategy}
-                                    >
-                                        <div className="space-y-2">
-                                            {subjects.map((subject) => (
-                                                <div
-                                                    key={subject.id}
-                                                    onClick={() => {
-                                                        setSelectedSubject(subject)
-                                                        setSelectedUnit(null)
-                                                    }}
-                                                    className={`p-3 rounded-md border transition-all cursor-pointer ${selectedSubject?.id === subject.id
-                                                        ? 'border-blue-500 bg-blue-50 text-blue-800'
-                                                        : 'border-gray-200 hover:border-blue-200 text-gray-700'
-                                                        }`}
-                                                >
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="font-medium">
-                                                            {subject.order_number}. {subject.name}
-                                                        </span>
-                                                        <div className="flex items-center space-x-1">
-                                                            <button className="p-1 text-gray-500 hover:text-gray-700">
-                                                                <GripVertical className="h-4 w-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </SortableContext>
-                                </DndContext>
-                            ) : (
-                                <div className="text-center text-gray-600 py-8">
-                                    Lütfen sol panelden bir sınıf seçin
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Sağ Panel - Üniteler */}
-                        <div className="col-span-7 bg-white rounded-lg shadow p-4">
-                            {selectedSubject ? (
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="font-semibold text-gray-900">
-                                            {selectedSubject.name} Üniteleri
-                                        </h2>
+                        <div className="col-span-3">
+                            <div className="bg-white rounded-lg shadow-sm border">
+                                <div className="p-4 border-b flex justify-between items-center">
+                                    <h2 className="font-semibold text-gray-900">Dersler</h2>
+                                    {selectedGrade && (
                                         <button
-                                            onClick={() => setShowUnitModal(true)}
-                                            className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-md"
+                                            onClick={() => setShowSubjectModal(true)}
+                                            className="text-blue-600 hover:text-blue-700"
                                         >
                                             <Plus className="h-5 w-5" />
                                         </button>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {units.map((unit) => (
-                                            <div
-                                                key={unit.id}
-                                                className={`p-4 rounded-lg border transition-all cursor-pointer ${selectedUnit?.id === unit.id
-                                                    ? 'border-blue-500 bg-blue-50 text-blue-800'
-                                                    : 'border-gray-200 hover:border-blue-200 text-gray-700'
-                                                    }`}
-                                                onClick={() => setSelectedUnit(unit)}
+                                    )}
+                                </div>
+                                <div className="p-2">
+                                    {selectedGrade ? (
+                                        <DndContext
+                                            sensors={sensors}
+                                            collisionDetection={closestCenter}
+                                            onDragEnd={handleSubjectDragEnd}
+                                        >
+                                            <SortableContext
+                                                items={subjects.map(subject => subject.id)}
+                                                strategy={verticalListSortingStrategy}
                                             >
-                                                <h3 className="font-medium">
-                                                    {unit.order_number}. {unit.name}
-                                                </h3>
+                                                <div className="space-y-2">
+                                                    {subjects.map((subject) => (
+                                                        <div
+                                                            key={subject.id}
+                                                            onClick={() => {
+                                                                setSelectedSubject(subject)
+                                                                setSelectedUnit(null)
+                                                            }}
+                                                            className={`p-3 rounded-md border transition-all cursor-pointer ${selectedSubject?.id === subject.id
+                                                                ? 'border-blue-500 bg-blue-50 text-blue-800'
+                                                                : 'border-gray-200 hover:border-blue-200 text-gray-700'
+                                                                }`}
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="font-medium">
+                                                                    {subject.order_number}. {subject.name}
+                                                                </span>
+                                                                <div className="flex items-center space-x-1">
+                                                                    <button className="p-1 text-gray-500 hover:text-gray-700">
+                                                                        <GripVertical className="h-4 w-4" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </SortableContext>
+                                        </DndContext>
+                                    ) : (
+                                        <div className="text-center text-gray-600 py-8">
+                                            Lütfen sol panelden bir sınıf seçin
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Sağ Panel - Üniteler ve Konular */}
+                        <div className="col-span-7">
+                            {selectedSubject ? (
+                                <div className="space-y-6">
+                                    {/* Üniteler */}
+                                    <div className="bg-white rounded-lg shadow-sm border">
+                                        <div className="p-4 border-b flex justify-between items-center">
+                                            <h2 className="font-semibold text-gray-900">
+                                                {selectedSubject.name} Üniteleri
+                                            </h2>
+                                            <button
+                                                onClick={() => setShowUnitModal(true)}
+                                                className="text-blue-600 hover:text-blue-700"
+                                            >
+                                                <Plus className="h-5 w-5" />
+                                            </button>
+                                        </div>
+                                        <div className="p-2">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                {units.map((unit) => (
+                                                    <div
+                                                        key={unit.id}
+                                                        className={`p-4 rounded-lg border transition-all cursor-pointer ${selectedUnit?.id === unit.id
+                                                            ? 'border-blue-500 bg-blue-50 text-blue-800'
+                                                            : 'border-gray-200 hover:border-blue-200 text-gray-700'
+                                                            }`}
+                                                        onClick={() => setSelectedUnit(unit)}
+                                                    >
+                                                        <h3 className="font-medium">
+                                                            {unit.order_number}. {unit.name}
+                                                        </h3>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
+                                        </div>
                                     </div>
+
+                                    {/* Konular */}
+                                    {selectedUnit && (
+                                        <div className="bg-white rounded-lg shadow-sm border">
+                                            <div className="p-4 border-b flex justify-between items-center">
+                                                <h2 className="font-semibold text-gray-900">
+                                                    {selectedUnit.name} Konuları
+                                                </h2>
+                                                <button
+                                                    onClick={() => setShowTopicModal(true)}
+                                                    className="text-blue-600 hover:text-blue-700"
+                                                >
+                                                    <Plus className="h-5 w-5" />
+                                                </button>
+                                            </div>
+                                            <div className="p-2">
+                                                <DndContext
+                                                    sensors={sensors}
+                                                    collisionDetection={closestCenter}
+                                                    onDragEnd={handleTopicDragEnd}
+                                                >
+                                                    <SortableContext
+                                                        items={topics.map(topic => topic.id)}
+                                                        strategy={verticalListSortingStrategy}
+                                                    >
+                                                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                                                            {topics.map((topic) => (
+                                                                <SortableTopic
+                                                                    key={topic.id}
+                                                                    topic={topic}
+                                                                    onEdit={(topic) => {
+                                                                        setEditingTopic(topic)
+                                                                        setShowTopicModal(true)
+                                                                    }}
+                                                                    onDelete={handleDeleteTopic}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    </SortableContext>
+                                                </DndContext>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
-                                <div className="text-center text-gray-600 py-8">
-                                    Lütfen orta panelden bir ders seçin
+                                <div className="bg-white rounded-lg shadow-sm border p-8 text-center text-gray-500">
+                                    Lütfen sol panelden bir ders seçin
                                 </div>
                             )}
                         </div>
                     </div>
-
-                    {/* Alt Panel - Seçili Ünitenin Konuları */}
-                    {selectedUnit && (
-                        <div className="bg-white rounded-lg shadow p-6">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-xl font-semibold text-gray-900">
-                                    {selectedUnit.name} Konuları
-                                </h2>
-                                <button
-                                    onClick={() => setShowTopicModal(true)}
-                                    className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-                                >
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Yeni Konu
-                                </button>
-                            </div>
-                            <DndContext
-                                sensors={sensors}
-                                collisionDetection={closestCenter}
-                                onDragEnd={handleTopicDragEnd}
-                            >
-                                <SortableContext
-                                    items={topics.map(topic => topic.id)}
-                                    strategy={verticalListSortingStrategy}
-                                >
-                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {topics.map((topic) => (
-                                            <SortableTopic
-                                                key={topic.id}
-                                                topic={topic}
-                                                onEdit={(topic) => {
-                                                    setEditingTopic(topic)
-                                                    setShowTopicModal(true)
-                                                }}
-                                                onDelete={handleDeleteTopic}
-                                            />
-                                        ))}
-                                    </div>
-                                </SortableContext>
-                            </DndContext>
-                        </div>
-                    )}
                 </div>
             </div>
 
