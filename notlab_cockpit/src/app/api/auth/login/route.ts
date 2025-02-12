@@ -2,40 +2,53 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
     try {
-        const { email, password } = await req.json()
-        const supabase = createRouteHandlerClient({ cookies })
+        const formData = await request.json()
+        const cookieStore = cookies()
+        const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
 
-        const { data: { session }, error: authError } = await supabase.auth.signInWithPassword({
-            email,
-            password
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: formData.email,
+            password: formData.password,
         })
 
-        if (authError) throw authError
+        if (signInError) throw signInError
 
-        // Kullanıcı rolünü kontrol et
+        // Kullanıcının rolünü kontrol et
         const { data: profile } = await supabase
             .from('profiles')
             .select('role')
-            .eq('id', session?.user.id)
+            .eq('email', formData.email)
             .single()
 
-        // Role göre yönlendirme URL'i
-        let redirectUrl = '/dashboard'
-        if (profile?.role === 'admin') {
-            redirectUrl = '/admin'
-        } else if (profile?.role === 'teacher') {
-            redirectUrl = '/teacher'
-        } else if (profile?.role === 'student') {
-            redirectUrl = '/student'
+        // Role göre yönlendirme URL'i belirle
+        let redirectUrl = '/'
+        if (profile) {
+            switch (profile.role) {
+                case 'admin':
+                    redirectUrl = '/admin'
+                    break
+                case 'student':
+                    redirectUrl = '/student'
+                    break
+                case 'teacher':
+                    redirectUrl = '/teacher'
+                    break
+            }
         }
 
-        return NextResponse.json({ redirectUrl })
+        return NextResponse.json({
+            message: 'Giriş başarılı',
+            redirectUrl
+        })
     } catch (error) {
+        console.error('Login error:', error)
         return NextResponse.json(
-            { message: 'Giriş yapılamadı' },
-            { status: 401 }
+            {
+                message: error instanceof Error ? error.message : 'Giriş yapılamadı'
+            },
+            { status: 400 }
         )
     }
 } 

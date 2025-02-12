@@ -207,10 +207,10 @@ export default function RegisterPage() {
                             error={errors.grade?.message}
                             options={[
                                 { value: '', label: 'Sınıfınızı seçin' },
-                                { value: '9', label: '9. Sınıf' },
-                                { value: '10', label: '10. Sınıf' },
-                                { value: '11', label: '11. Sınıf' },
-                                { value: '12', label: '12. Sınıf' }
+                                { value: '4c9b19a8-38cf-421c-b51f-4b423aac8399', label: '9. Sınıf' },
+                                { value: '41f93dd0-d7dc-438f-9aea-2eaf68e20d3d', label: '10. Sınıf' },
+                                { value: 'd29b6c97-1fce-44cd-8ce2-10c39e87ab4b', label: '11. Sınıf' },
+                                { value: '81c53498-21a5-4329-8bd6-1dce49e74ab2', label: '12. Sınıf' }
                             ]}
                         />
 

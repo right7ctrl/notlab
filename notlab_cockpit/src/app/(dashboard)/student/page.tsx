@@ -5,14 +5,12 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Book, FileQuestion, ClipboardList, Trophy } from 'lucide-react'
 import Link from 'next/link'
 import { useStudentLayout } from './layout'
+import Image from 'next/image'
 
 type Subject = {
     id: string
     name: string
-    grade_id: string
-    quiz_count: number
-    question_count: number
-    completed_quiz_count: number
+    grade_id: number
 }
 
 export default function StudentDashboard() {
@@ -20,46 +18,62 @@ export default function StudentDashboard() {
     const { setTitle } = useStudentLayout()
     const [loading, setLoading] = useState(true)
     const [subjects, setSubjects] = useState<Subject[]>([])
+    const [profileData, setProfileData] = useState<any>(null)
 
     useEffect(() => {
         setTitle('Derslerim')
         loadSubjects()
+        loadProfileData()
     }, [])
 
     const loadSubjects = async () => {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // Öğrencinin sınıfını al
+        // Önce kullanıcının grade bilgisini alalım
         const { data: profile } = await supabase
             .from('profiles')
             .select('grade')
             .eq('id', user.id)
             .single()
 
+        console.log('Profile grade:', profile?.grade) // Debug için
+
         if (!profile?.grade) return
 
-        // Sınıfa ait dersleri yükle
-        const { data } = await supabase
+        // Bu grade'e ait dersleri listeleyelim
+        const { data: subjectsData, error } = await supabase
             .from('subjects')
-            .select(`
-                *,
-                quizzes(count),
-                questions(count),
-                quiz_results!inner(count)
-            `)
+            .select('*')
             .eq('grade_id', profile.grade)
 
-        if (data) {
-            const subjectsWithCounts = data.map(subject => ({
-                ...subject,
-                quiz_count: subject.quizzes[0]?.count || 0,
-                question_count: subject.questions[0]?.count || 0,
-                completed_quiz_count: subject.quiz_results[0]?.count || 0
-            }))
-            setSubjects(subjectsWithCounts)
+        console.log('Subjects:', subjectsData, 'Error:', error) // Debug için
+
+        if (subjectsData) {
+            setSubjects(subjectsData)
         }
+
         setLoading(false)
+    }
+
+    const loadProfileData = async () => {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        const { data: profileData } = await supabase
+            .from('profiles')
+            .select(`
+                *,
+                grades (
+                    number
+                )
+            `)
+            .eq('id', user.id)
+            .single()
+
+        if (profileData) {
+            setProfileData(profileData)
+        }
     }
 
     if (loading) {

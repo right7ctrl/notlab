@@ -2,53 +2,49 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
-  
-  // Supabase client'ı doğru şekilde oluştur
-  const supabase = createMiddlewareClient({ req, res })
+export async function middleware(request: NextRequest) {
+    const res = NextResponse.next()
+    const supabase = createMiddlewareClient({ req: request, res })
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    const {
+        data: { session },
+    } = await supabase.auth.getSession()
 
-  // Auth kontrolleri
-  if (!session && req.nextUrl.pathname.startsWith('/dashboard')) {
-    const redirectUrl = new URL('/login', req.url)
-    return NextResponse.redirect(redirectUrl)
-  }
+    // Kullanıcı giriş yapmamışsa login sayfasına yönlendir
+    if (!session) {
+        return NextResponse.redirect(new URL('/login', request.url))
+    }
 
-  // Role bazlı kontroller
-  if (session) {
+    // Kullanıcının rolünü kontrol et
     const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
 
-    // Admin paneline sadece adminler erişebilir
-    if (req.nextUrl.pathname.startsWith('/admin') && profile?.role !== 'admin') {
-      const redirectUrl = new URL('/dashboard', req.url)
-      return NextResponse.redirect(redirectUrl)
+    // Admin paneline erişim kontrolü
+    if (request.nextUrl.pathname.startsWith('/admin')) {
+        if (profile?.role !== 'admin') {
+            // Admin değilse ana sayfaya yönlendir
+            return NextResponse.redirect(new URL('/', request.url))
+        }
     }
 
-    // Öğretmen paneline sadece öğretmenler ve adminler erişebilir
-    if (req.nextUrl.pathname.startsWith('/teacher') && 
-        !['admin', 'teacher'].includes(profile?.role || '')) {
-      const redirectUrl = new URL('/dashboard', req.url)
-      return NextResponse.redirect(redirectUrl)
+    // Öğrenci paneline erişim kontrolü
+    if (request.nextUrl.pathname.startsWith('/student')) {
+        if (profile?.role !== 'student') {
+            // Öğrenci değilse ana sayfaya yönlendir
+            return NextResponse.redirect(new URL('/', request.url))
+        }
     }
 
-    // Giriş yapmış kullanıcılar login/register sayfalarına gidemez
-    if (session && (req.nextUrl.pathname === '/login' || req.nextUrl.pathname === '/register')) {
-      const redirectUrl = new URL('/dashboard', req.url)
-      return NextResponse.redirect(redirectUrl)
-    }
-  }
-
-  return res
+    return res
 }
 
+// Middleware'in çalışacağı path'ler
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+    matcher: [
+        '/admin/:path*',
+        '/student/:path*'
+    ]
 } 
