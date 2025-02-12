@@ -21,272 +21,225 @@ type Question = {
     topic_name?: string
 }
 
-type Grade = {
-    id: string
-    name: string
-}
-
-type Subject = {
-    id: string
-    name: string
-    grade_id: string
-}
-
 export default function QuestionsPage() {
     const router = useRouter()
     const supabase = createClientComponentClient()
+    const { setTitle } = useAdminLayout()
     const [questions, setQuestions] = useState<Question[]>([])
-    const [loading, setLoading] = useState(false)
+    const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
     const [selectedGrade, setSelectedGrade] = useState('')
     const [selectedSubject, setSelectedSubject] = useState('')
-
-    const [grades, setGrades] = useState<Grade[]>([])
-    const [subjects, setSubjects] = useState<Subject[]>([])
-
-    const { setTitle } = useAdminLayout()
+    const [grades, setGrades] = useState<{ id: string, name: string }[]>([])
+    const [subjects, setSubjects] = useState<{ id: string, name: string, grade_id: string }[]>([])
+    const [hasFilters, setHasFilters] = useState(false)
 
     useEffect(() => {
-        setTitle('Soru Bankası')
-    }, [setTitle])
-
-    // Sınıfları yükle
-    useEffect(() => {
-        const loadGrades = async () => {
-            const { data } = await supabase
-                .from('grades')
-                .select('*')
-                .order('number')
-
-            if (data) setGrades(data)
-        }
+        setTitle('Sorular')
         loadGrades()
+        loadQuestions()
     }, [])
 
-    // Seçili sınıfa göre dersleri yükle
+    const loadGrades = async () => {
+        const { data } = await supabase
+            .from('grades')
+            .select('id, name')
+            .order('number')
+
+        if (data) setGrades(data)
+    }
+
     useEffect(() => {
         const loadSubjects = async () => {
             if (!selectedGrade) {
                 setSubjects([])
+                setSelectedSubject('')
                 return
             }
 
             const { data } = await supabase
                 .from('subjects')
-                .select('*')
+                .select('id, name, grade_id')
                 .eq('grade_id', selectedGrade)
-                .order('order_number')
+                .order('name')
 
             if (data) setSubjects(data)
         }
+
         loadSubjects()
     }, [selectedGrade])
 
     const loadQuestions = async () => {
-        setLoading(true)
-        try {
-            let query = supabase
-                .from('questions')
-                .select(`
-                    *,
-                    subjects(name, grade_id),
-                    units(name),
-                    topics(name)
-                `)
-                .order('created_at', { ascending: false })
+        const { data, error } = await supabase
+            .from('questions')
+            .select(`
+                *,
+                subjects (name),
+                units (name),
+                topics (name)
+            `)
+            .order('created_at', { ascending: false })
 
-            if (selectedGrade) {
-                query = query.eq('subjects.grade_id', selectedGrade)
-            }
-
-            if (selectedSubject) {
-                query = query.eq('subject_id', selectedSubject)
-            }
-
-            if (searchTerm) {
-                query = query.or(`title.ilike.%${searchTerm}%,content.ilike.%${searchTerm}%`)
-            }
-
-            const { data, error } = await query
-
-            if (error) throw error
-
-            const formattedQuestions = data.map(q => ({
+        if (data) {
+            setQuestions(data.map(q => ({
                 ...q,
                 subject_name: q.subjects?.name,
                 unit_name: q.units?.name,
                 topic_name: q.topics?.name
-            }))
-
-            setQuestions(formattedQuestions)
-        } catch (error) {
-            console.error('Error loading questions:', error)
-        } finally {
-            setLoading(false)
+            })))
         }
+        setLoading(false)
     }
 
-    // Arama işlemi için debounce fonksiyonu
-    const handleSearch = () => {
-        loadQuestions()
-    }
-
-    const handleDelete = async (questionId: string) => {
+    const handleDelete = async (id: string) => {
         if (!window.confirm('Bu soruyu silmek istediğinize emin misiniz?')) return
 
-        try {
-            const { error } = await supabase
-                .from('questions')
-                .delete()
-                .eq('id', questionId)
+        const { error } = await supabase
+            .from('questions')
+            .delete()
+            .eq('id', id)
 
-            if (error) throw error
-
-            // Soruları yeniden yükle
-            loadQuestions()
-        } catch (error) {
-            console.error('Error deleting question:', error)
-            alert('Soru silinirken bir hata oluştu')
+        if (!error) {
+            setQuestions(questions.filter(q => q.id !== id))
         }
+    }
+
+    const filteredQuestions = questions.filter(q => {
+        if (searchTerm || selectedSubject) {
+            const matchesSearch = searchTerm ?
+                (q.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    q.content.toLowerCase().includes(searchTerm.toLowerCase())) : true
+            const matchesSubject = selectedSubject ? q.subject_id === selectedSubject : true
+            return matchesSearch && matchesSubject
+        }
+        return false
+    })
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+        )
     }
 
     return (
-        <div className="p-4">
-            <div className="bg-white p-6 rounded-lg shadow-sm mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="md:col-span-2">
+        <div className="p-6">
+            {/* Üst Bar */}
+            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-6">
+                <div className="flex items-center gap-4 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:w-64">
                         <Input
-                            icon={Search}
+                            type="text"
                             placeholder="Soru ara..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10"
                         />
+                        <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
                     </div>
-
                     <Select
-                        label="Sınıf"
                         value={selectedGrade}
                         onChange={(e) => {
                             setSelectedGrade(e.target.value)
                             setSelectedSubject('')
                         }}
+                        className="w-full sm:w-48"
                         options={[
-                            { value: '', label: 'Tüm Sınıflar' },
-                            ...grades.map(grade => ({
-                                value: grade.id,
-                                label: grade.name
-                            }))
+                            { value: '', label: 'Sınıf Seçin' },
+                            ...grades.map(g => ({ value: g.id, label: g.name }))
                         ]}
                     />
-
                     <Select
-                        label="Ders"
                         value={selectedSubject}
                         onChange={(e) => setSelectedSubject(e.target.value)}
+                        className="w-full sm:w-48"
                         options={[
-                            { value: '', label: 'Tüm Dersler' },
-                            ...subjects.map(subject => ({
-                                value: subject.id,
-                                label: subject.name
-                            }))
+                            { value: '', label: 'Ders Seçin' },
+                            ...subjects.map(s => ({ value: s.id, label: s.name }))
                         ]}
                         disabled={!selectedGrade}
                     />
                 </div>
-
-                <div className="mt-6 flex justify-end">
-                    <button
-                        onClick={handleSearch}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
-                    >
-                        <Search className="h-4 w-4 mr-2" />
-                        Ara
-                    </button>
-                </div>
+                <button
+                    onClick={() => router.push('/admin/questions/new')}
+                    className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                >
+                    <Plus className="h-5 w-5" />
+                    <span>Yeni Soru</span>
+                </button>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm">
-                <div className="border-b px-6 py-4">
-                    <h2 className="font-medium text-gray-700">Sorular</h2>
-                </div>
-
-                <div className="divide-y">
-                    {loading ? (
-                        <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                            <p className="mt-2 text-sm text-gray-500">Sorular yükleniyor...</p>
+            {/* Soru Listesi */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                {!searchTerm && !selectedSubject ? (
+                    <div className="p-8 text-center">
+                        <div className="mb-4">
+                            <Search className="h-12 w-12 text-gray-300 mx-auto" />
                         </div>
-                    ) : questions.length === 0 ? (
-                        <div className="text-center py-12">
-                            <p className="text-gray-500 mb-2">Henüz soru bulunamadı</p>
-                            <p className="text-sm text-gray-400">
-                                Yukarıdaki filtreleri kullanarak arama yapabilirsiniz
-                            </p>
-                        </div>
-                    ) : (
-                        questions.map((question) => (
-                            <div
-                                key={question.id}
-                                className="group hover:bg-gray-50 transition-colors"
-                            >
-                                <div className="px-6 py-4">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-4">
-                                                <h3 className="text-sm font-medium text-gray-900 truncate">
-                                                    {question.title}
-                                                </h3>
-                                                <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                    <span>{question.subject_name}</span>
-                                                    <ChevronRight className="h-3 w-3" />
-                                                    <span>{question.unit_name}</span>
-                                                    <ChevronRight className="h-3 w-3" />
-                                                    <span>{question.topic_name}</span>
-                                                </div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">
+                            Soruları Görüntülemek İçin
+                        </h3>
+                        <p className="text-gray-500">
+                            Lütfen önce bir sınıf, sonra ders seçin veya arama yapın
+                        </p>
+                    </div>
+                ) : filteredQuestions.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                        <p className="mb-2">Sonuç bulunamadı</p>
+                        <p className="text-sm">Farklı bir arama yapmayı deneyin</p>
+                    </div>
+                ) : (
+                    <div className="divide-y divide-gray-200">
+                        {filteredQuestions.map((question) => (
+                            <div key={question.id} className="p-4 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-3 mb-1">
+                                            <h3 className="text-base font-medium text-gray-900 truncate">
+                                                {question.title}
+                                            </h3>
+                                            <div className="flex items-center gap-1 text-sm text-gray-500">
+                                                <ChevronRight className="h-4 w-4" />
+                                                <span>{question.subject_name}</span>
+                                                <ChevronRight className="h-4 w-4" />
+                                                <span>{question.unit_name}</span>
+                                                <ChevronRight className="h-4 w-4" />
+                                                <span>{question.topic_name}</span>
                                             </div>
-                                            <p className="mt-1 text-sm text-gray-500 line-clamp-2">
-                                                {question.content}
-                                            </p>
                                         </div>
-
-                                        <div className="ml-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button
-                                                onClick={() => router.push(`/admin/questions/${question.id}`)}
-                                                className="p-1 text-gray-400 hover:text-gray-600"
-                                                title="Görüntüle"
-                                            >
-                                                <Eye className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => router.push(`/admin/questions/${question.id}/edit`)}
-                                                className="p-1 text-gray-400 hover:text-blue-600"
-                                                title="Düzenle"
-                                            >
-                                                <Edit className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(question.id)}
-                                                className="p-1 text-gray-400 hover:text-red-600"
-                                                title="Sil"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        </div>
+                                        <p className="text-sm text-gray-500 line-clamp-2">
+                                            {question.content}
+                                        </p>
                                     </div>
-
-                                    <div className="mt-2 flex items-center gap-2">
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
-                                            {question.options?.length || 0} Şık
-                                        </span>
-                                        <span className="text-xs text-gray-500">
-                                            {new Date(question.created_at).toLocaleDateString('tr-TR')}
-                                        </span>
+                                    <div className="flex items-center gap-2 ml-4">
+                                        <button
+                                            onClick={() => router.push(`/admin/questions/${question.id}`)}
+                                            className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
+                                            title="Görüntüle"
+                                        >
+                                            <Eye className="h-5 w-5" />
+                                        </button>
+                                        <button
+                                            onClick={() => router.push(`/admin/questions/${question.id}/edit`)}
+                                            className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
+                                            title="Düzenle"
+                                        >
+                                            <Edit className="h-5 w-5" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(question.id)}
+                                            className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+                                            title="Sil"
+                                        >
+                                            <Trash2 className="h-5 w-5" />
+                                        </button>
                                     </div>
                                 </div>
                             </div>
-                        ))
-                    )}
-                </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     )

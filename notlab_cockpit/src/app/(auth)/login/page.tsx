@@ -10,6 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useRouter } from 'next/navigation'
 import { Input } from "@/components/ui/input"
+import { supabase } from '@/lib/supabase'
 
 // Form şeması
 const loginSchema = z.object({
@@ -49,10 +50,17 @@ export default function LoginPage() {
                 throw new Error(result.message)
             }
 
+            // Kullanıcı giriş yaptıktan sonra last_sign_in_at'i güncelle
+            await supabase
+                .from('profiles')
+                .update({ last_sign_in_at: new Date().toISOString() })
+                .eq('id', (await supabase.auth.getUser()).data.user?.id)
+
             // Role göre yönlendirme
             router.push(result.redirectUrl)
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Giriş yapılamadı')
+            console.error('Error logging in:', err)
+            setError(err instanceof Error ? err.message : 'E-posta veya şifre hatalı')
         } finally {
             setIsLoading(false)
         }

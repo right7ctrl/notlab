@@ -4,13 +4,14 @@ import Link from 'next/link'
 import { Button } from "@/components/ui/button"
 import { motion } from "framer-motion"
 import { ArrowLeft } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useRouter } from 'next/navigation'
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 // Form şeması
 const registerSchema = z.object({
@@ -28,11 +29,26 @@ const registerSchema = z.object({
 
 type RegisterForm = z.infer<typeof registerSchema>
 
+type Grade = {
+    id: string
+    name: string
+}
+
 export default function RegisterPage() {
     const router = useRouter()
+    const supabase = createClientComponentClient()
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
     const [isLoading, setIsLoading] = useState(false)
+    const [grades, setGrades] = useState<Grade[]>([])
+    const [formData, setFormData] = useState({
+        email: '',
+        password: '',
+        name: '',
+        surname: '',
+        grade_id: '',
+        role: 'student' as 'student' | 'teacher'
+    })
 
     const {
         register,
@@ -41,6 +57,19 @@ export default function RegisterPage() {
     } = useForm<RegisterForm>({
         resolver: zodResolver(registerSchema)
     })
+
+    useEffect(() => {
+        const loadGrades = async () => {
+            const { data } = await supabase
+                .from('grades')
+                .select('*')
+                .order('number')
+
+            if (data) setGrades(data)
+        }
+
+        loadGrades()
+    }, [])
 
     const onSubmit = async (data: RegisterForm) => {
         try {
@@ -176,13 +205,14 @@ export default function RegisterPage() {
                             {...register('grade', { valueAsNumber: true })}
                             label="Sınıf"
                             error={errors.grade?.message}
-                        >
-                            <option value="">Sınıfınızı seçin</option>
-                            <option value="9">9. Sınıf</option>
-                            <option value="10">10. Sınıf</option>
-                            <option value="11">11. Sınıf</option>
-                            <option value="12">12. Sınıf</option>
-                        </Select>
+                            options={[
+                                { value: '', label: 'Sınıfınızı seçin' },
+                                { value: '9', label: '9. Sınıf' },
+                                { value: '10', label: '10. Sınıf' },
+                                { value: '11', label: '11. Sınıf' },
+                                { value: '12', label: '12. Sınıf' }
+                            ]}
+                        />
 
                         <div className="flex items-center">
                             <input
