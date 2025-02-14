@@ -5,6 +5,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
 import { Search, Bell, ChevronDown } from 'lucide-react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 
 type LayoutContextType = {
     title: string
@@ -42,6 +43,7 @@ export default function StudentLayout({
     const [showNotifications, setShowNotifications] = useState(false)
     const [showProfileMenu, setShowProfileMenu] = useState(false)
     const supabase = createClientComponentClient()
+    const router = useRouter()
 
     const unreadCount = notifications.filter(n => !n.read).length
 
@@ -90,6 +92,16 @@ export default function StudentLayout({
     useEffect(() => {
         loadProfileData()
     }, [])
+
+    const handleSignOut = async () => {
+        try {
+            await supabase.auth.signOut()
+            localStorage.removeItem('session')
+            window.location.href = '/auth/login'
+        } catch (error) {
+            console.error('Çıkış yapılırken hata oluştu:', error)
+        }
+    }
 
     return (
         <LayoutContext.Provider value={{ title, setTitle, notifications, unreadCount }}>
@@ -141,10 +153,10 @@ export default function StudentLayout({
                                         Materyaller
                                     </Link>
                                     <Link
-                                        href="/student/library"
+                                        href="/student/statistics"
                                         className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors"
                                     >
-                                        Kütüphane
+                                        İstatistikler
                                     </Link>
                                 </nav>
                             </div>
@@ -257,7 +269,7 @@ export default function StudentLayout({
                                                 </Link>
                                                 <hr className="my-1 border-gray-100" />
                                                 <button
-                                                    onClick={() => supabase.auth.signOut()}
+                                                    onClick={handleSignOut}
                                                     className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 w-full text-left"
                                                 >
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

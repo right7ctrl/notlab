@@ -10,31 +10,38 @@ export async function middleware(request: NextRequest) {
         data: { session },
     } = await supabase.auth.getSession()
 
-    // Kullanıcı giriş yapmamışsa login sayfasına yönlendir
-    if (!session) {
-        return NextResponse.redirect(new URL('/login', request.url))
+    // Auth sayfalarına gidiyorsa ve oturum açıksa, ana sayfaya yönlendir
+    if (request.nextUrl.pathname.startsWith('/auth/') && session) {
+        return NextResponse.redirect(new URL('/student', request.url))
+    }
+
+    // Korumalı sayfalara gidiyorsa ve oturum kapalıysa, login'e yönlendir
+    if ((request.nextUrl.pathname.startsWith('/student') || 
+         request.nextUrl.pathname.startsWith('/admin')) && 
+        !session) {
+        return NextResponse.redirect(new URL('/auth/login', request.url))
     }
 
     // Kullanıcının rolünü kontrol et
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single()
+    if (session) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single()
 
-    // Admin paneline erişim kontrolü
-    if (request.nextUrl.pathname.startsWith('/admin')) {
-        if (profile?.role !== 'admin') {
-            // Admin değilse ana sayfaya yönlendir
-            return NextResponse.redirect(new URL('/', request.url))
+        // Admin paneline erişim kontrolü
+        if (request.nextUrl.pathname.startsWith('/admin')) {
+            if (profile?.role !== 'admin') {
+                return NextResponse.redirect(new URL('/', request.url))
+            }
         }
-    }
 
-    // Öğrenci paneline erişim kontrolü
-    if (request.nextUrl.pathname.startsWith('/student')) {
-        if (profile?.role !== 'student') {
-            // Öğrenci değilse ana sayfaya yönlendir
-            return NextResponse.redirect(new URL('/', request.url))
+        // Öğrenci paneline erişim kontrolü
+        if (request.nextUrl.pathname.startsWith('/student')) {
+            if (profile?.role !== 'student') {
+                return NextResponse.redirect(new URL('/', request.url))
+            }
         }
     }
 
@@ -44,6 +51,7 @@ export async function middleware(request: NextRequest) {
 // Middleware'in çalışacağı path'ler
 export const config = {
     matcher: [
+        '/auth/:path*',
         '/admin/:path*',
         '/student/:path*'
     ]
