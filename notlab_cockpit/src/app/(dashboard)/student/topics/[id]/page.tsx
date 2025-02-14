@@ -5,6 +5,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Book, FileQuestion, ChevronRight, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { checkAchievements } from '@/lib/achievements'
 
 type Topic = {
     id: string
@@ -356,6 +357,10 @@ export default function TopicDetail({ params }: { params: Promise<{ id: string }
                 setShowResults(false)
             }, 2000)
 
+            // Başarımları kontrol et
+            await checkAchievements(user.id, 'quiz_completed')
+            await checkAchievements(user.id, 'question_solved', quizQuestions.length)
+
         } catch (error) {
             console.error('Quiz istatistikleri güncellenirken hata oluştu:', error)
             alert('Quiz sonucu kaydedilirken bir hata oluştu.')
@@ -516,6 +521,12 @@ export default function TopicDetail({ params }: { params: Promise<{ id: string }
             // Konuyu okundu olarak işaretle ve quiz yoksa tamamlandı olarak işaretle
             const hasQuiz = topic.quizzes && topic.quizzes.length > 0;
             updateProgress(true, !hasQuiz); // Quiz yoksa direkt tamamlandı olarak işaretle
+
+            // Başarımları kontrol et
+            const session = JSON.parse(localStorage.getItem('session') || '{}')
+            if (session?.user?.id) {
+                checkAchievements(session.user.id, 'topic_read')
+            }
         }
     }, [topic?.id]);
 
