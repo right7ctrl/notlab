@@ -11,6 +11,13 @@ type Topic = {
     name: string
     unit_id: string
     order_number: number
+    progress?: {
+        is_read: boolean
+        is_completed: boolean
+        completed_quizzes?: string[]
+        total_quizzes?: number
+        progressPercentage: number
+    }
 }
 
 type Unit = {
@@ -35,6 +42,7 @@ export default function UnitDetail({ params }: { params: Promise<{ id: string }>
 
     useEffect(() => {
         loadUnitAndTopics()
+        loadUnitAndProgress()
     }, [resolvedParams.id])
 
     const loadUnitAndTopics = async () => {
@@ -65,6 +73,111 @@ export default function UnitDetail({ params }: { params: Promise<{ id: string }>
 
         if (topicsData) {
             setTopics(topicsData)
+        }
+    }
+
+    const loadUnitAndProgress = async () => {
+        const session = JSON.parse(localStorage.getItem('session') || '{}')
+        const user = session?.user
+
+        if (!user?.id) return;
+
+        // Ünite bilgilerini al
+        const { data: unitData } = await supabase
+            .from('units')
+            .select(`
+                *,
+                subjects (
+                    id,
+                    name
+                )
+            `)
+            .eq('id', resolvedParams.id)
+            .single()
+
+        if (unitData) {
+            setUnit(unitData)
+
+            // Progress bilgisini al
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('progress')
+                .eq('id', user.id)
+                .single()
+
+            // Konuları ve quizleri yükle
+            const { data: topicsData } = await supabase
+                .from('topics')
+                .select(`
+                    *,
+                    quizzes (
+                        id,
+                        title
+                    )
+                `)
+                .eq('unit_id', resolvedParams.id)
+                .order('order_number', { ascending: true })
+
+            if (topicsData) {
+                // Ünite progress bilgilerini hesapla
+                const unitProgress = profile?.progress?.subjects?.[unitData.subject_id]?.units?.[unitData.id]
+                const topicsProgress = unitProgress?.topics || {}
+
+                // Konuların progress bilgilerini ekle
+                const topicsWithProgress = topicsData.map(topic => {
+                    const topicProgress = topicsProgress[topic.id] || {
+                        is_read: false,
+                        is_completed: false,
+                        completed_quizzes: []
+                    };
+
+                    // Konunun quiz sayısını hesapla
+                    const totalQuizzes = topic.quizzes?.length || 0;
+                    const completedQuizzes = topicProgress.completed_quizzes?.length || 0;
+
+                    // Debug için
+                    console.log(`Topic ${topic.name}:`, {
+                        totalQuizzes,
+                        completedQuizzes,
+                        isRead: topicProgress.is_read,
+                        isCompleted: topicProgress.is_completed
+                    });
+
+                    // Progress yüzdesini hesapla
+                    let progressPercentage = 0;
+                    if (topicProgress.is_completed) {
+                        progressPercentage = 100;
+                    } else if (topicProgress.is_read) {
+                        if (totalQuizzes > 0) {
+                            // Quiz varsa okuma %50, her quiz %50'yi eşit böler
+                            progressPercentage = 50 + (completedQuizzes / totalQuizzes) * 50;
+                        } else {
+                            // Quiz yoksa sadece okuma %100
+                            progressPercentage = 100;
+                        }
+                    }
+
+                    // Debug için
+                    console.log(`Progress for ${topic.name}:`, progressPercentage);
+
+                    return {
+                        ...topic,
+                        progress: {
+                            ...topicProgress,
+                            progressPercentage: Math.round(progressPercentage)
+                        }
+                    };
+                });
+
+                setTopics(topicsWithProgress)
+
+                // Ünitenin toplam progress'ini hesapla
+                const totalProgress = Math.round(
+                    topicsWithProgress.reduce((sum, topic) => sum + (topic.progress?.progressPercentage || 0), 0) /
+                    topicsWithProgress.length
+                );
+                setProgress(totalProgress);
+            }
         }
     }
 
@@ -104,10 +217,7 @@ export default function UnitDetail({ params }: { params: Promise<{ id: string }>
                         <div className="w-3 h-3 rounded-full border-2 border-gray-300" />
                         <span className="text-gray-500">%{progress} Tamamlandı</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full border-2 border-gray-300" />
-                        <span className="text-gray-500">%{success} Başarı</span>
-                    </div>
+
                 </div>
             </div>
 
@@ -141,9 +251,58 @@ export default function UnitDetail({ params }: { params: Promise<{ id: string }>
                                 key={topic.id}
                                 className="flex items-start gap-4 bg-white rounded-xl border border-gray-200 p-4"
                             >
-                                <div className="flex-shrink-0">
-                                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                                        <span className="text-sm font-medium text-gray-600">{index + 1}</span>
+                                <div className="flex-shrink-0 relative">
+                                    {/* Dairesel Progress Bar */}
+                                    <svg className="w-8 h-8">
+                                        <circle
+                                            className="text-gray-200"
+                                            strokeWidth="2"
+                                            stroke="currentColor"
+                                            fill="transparent"
+                                            r="15"
+                                            cx="16"
+                                            cy="16"
+                                        />
+                                        {topic.progress?.is_completed && (
+                                            <circle
+                                                className="text-green-500"
+                                                strokeWidth="2"
+                                                strokeDasharray={15 * 2 * Math.PI}
+                                                strokeDashoffset="0"
+                                                strokeLinecap="round"
+                                                stroke="currentColor"
+                                                fill="transparent"
+                                                r="15"
+                                                cx="16"
+                                                cy="16"
+                                            />
+                                        )}
+                                        {!topic.progress?.is_completed && topic.progress?.is_read && (
+                                            <circle
+                                                className="text-blue-500"
+                                                strokeWidth="2"
+                                                strokeDasharray={15 * 2 * Math.PI}
+                                                strokeDashoffset={15 * Math.PI} // Yarım daire
+                                                strokeLinecap="round"
+                                                stroke="currentColor"
+                                                fill="transparent"
+                                                r="15"
+                                                cx="16"
+                                                cy="16"
+                                            />
+                                        )}
+                                    </svg>
+                                    {/* Numara */}
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <span className={`text-xs font-medium ${topic.progress?.is_completed
+                                            ? 'text-green-600'
+                                            : topic.progress?.is_read
+                                                ? 'text-blue-600'
+                                                : 'text-gray-600'
+                                            }`}
+                                        >
+                                            {topic.progress?.progressPercentage}
+                                        </span>
                                     </div>
                                 </div>
                                 <div className="flex-1">
@@ -154,8 +313,16 @@ export default function UnitDetail({ params }: { params: Promise<{ id: string }>
                                 </div>
                                 <div className="flex-shrink-0">
                                     <Link href={`/student/topics/${topic.id}`}>
-                                        <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                                            Başla
+                                        <button className={`
+                                            px-4 py-2 text-sm font-medium rounded-lg transition-colors
+                                            ${topic.progress?.is_completed
+                                                ? 'text-green-700 bg-green-100 hover:bg-green-200'
+                                                : topic.progress?.is_read
+                                                    ? 'text-blue-700 bg-blue-100 hover:bg-blue-200'
+                                                    : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
+                                            }
+                                        `}>
+                                            {topic.progress?.is_completed ? 'Tekrar Et' : 'Başla'}
                                         </button>
                                     </Link>
                                 </div>

@@ -6,13 +6,10 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 type SubjectStatistics = {
     subject_id: string
     subject_name: string
-    total_quizzes: number
-    completed_quizzes: number
-    total_attempts: number
-    total_questions: number
-    correct_answers: number
+    total_topics: number
+    completed_topics: number
     success_rate: number
-    last_attempt_at: string
+    last_activity: string
 }
 
 export default function SubjectStatisticsPage() {
@@ -20,86 +17,64 @@ export default function SubjectStatisticsPage() {
     const [loading, setLoading] = useState(true)
     const supabase = createClientComponentClient()
 
+    const loadStatistics = async () => {
+        const session = JSON.parse(localStorage.getItem('session') || '{}')
+        const user = session?.user
+
+        if (!user?.id) return;
+
+        // Kullanıcının progress bilgisini al
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select(`
+                progress,
+                grade
+            `)
+            .eq('id', user.id)
+            .single();
+
+        if (!profile) return;
+
+        // Sınıftaki tüm dersleri al
+        const { data: subjects } = await supabase
+            .from('subjects')
+            .select('*')
+            .eq('grade_id', profile.grade);
+
+        if (!subjects) return;
+
+        // İstatistikleri hesapla
+        const stats = subjects.map(subject => {
+            const subjectProgress = profile.progress?.subjects?.[subject.id];
+            const totalTopics = Object.values(subjectProgress?.units || {})
+                .reduce((sum, unit) => sum + Object.keys(unit.topics || {}).length, 0);
+            const completedTopics = Object.values(subjectProgress?.units || {})
+                .reduce((sum, unit) => sum + Object.values(unit.topics || {})
+                    .filter(topic => topic.is_completed).length, 0);
+
+            return {
+                subject_id: subject.id,
+                subject_name: subject.name,
+                total_topics: totalTopics,
+                completed_topics: completedTopics,
+                success_rate: totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0,
+                last_activity: subjectProgress?.last_activity || '-'
+            };
+        });
+
+        setStatistics(stats);
+    }
+
     useEffect(() => {
         loadStatistics()
     }, [])
 
-    const loadStatistics = async () => {
-        try {
-            const session = JSON.parse(localStorage.getItem('session') || '{}')
-            const user = session?.user
-            const grade_id = user?.user_metadata?.grade_id
-
-            if (!user?.id) {
-                throw new Error('Kullanıcı bulunamadı')
-            }
-
-            if (!grade_id) {
-                throw new Error('Kullanıcının sınıf bilgisi bulunamadı')
-            }
-
-            console.log("User grade_id:", grade_id)
-
-            // Önce kullanıcının sınıfındaki tüm dersleri al
-            const { data: subjects, error: subjectsError } = await supabase
-                .from('subjects')
-                .select('*')
-                .eq('grade_id', grade_id)
-
-            console.log("Subjects:", subjects)
-            console.log("Subjects Error:", subjectsError)
-
-            if (!subjects) return
-
-            // Her ders için istatistikleri hesapla
-            const subjectStats = await Promise.all(subjects.map(async (subject) => {
-                // Derse ait tüm quizleri al
-                const { data: quizzes } = await supabase
-                    .from('quizzes')
-                    .select('id')
-                    .eq('subject_id', subject.id)
-
-                const quizIds = quizzes?.map(q => q.id) || []
-
-                // Bu quizlere ait istatistikleri al
-                const { data: quizStats } = await supabase
-                    .from('user_quiz_statistics')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .in('quiz_id', quizIds)
-
-                console.log(`Subject ${subject.name} - Quiz Stats:`, quizStats)
-
-                // İstatistikleri hesapla
-                const stats = {
-                    subject_id: subject.id,
-                    subject_name: subject.name,
-                    total_quizzes: quizzes?.length || 0,
-                    completed_quizzes: quizStats?.length || 0,
-                    total_attempts: quizStats?.reduce((sum, stat) => sum + stat.total_attempts, 0) || 0,
-                    total_questions: quizStats?.reduce((sum, stat) => sum + (stat.total_attempts * stat.total_questions), 0) || 0,
-                    correct_answers: quizStats?.reduce((sum, stat) => sum + stat.correct_answers, 0) || 0,
-                    success_rate: 0,
-                    last_attempt_at: quizStats?.sort((a, b) =>
-                        new Date(b.last_attempt_at).getTime() - new Date(a.last_attempt_at).getTime()
-                    )[0]?.last_attempt_at || '-'
-                }
-
-                // Başarı oranını hesapla
-                if (stats.total_questions > 0) {
-                    stats.success_rate = Math.round((stats.correct_answers / stats.total_questions) * 100)
-                }
-
-                return stats
-            }))
-
-            console.log("Final Stats:", subjectStats)
-            setStatistics(subjectStats)
-        } catch (error) {
-            console.error('İstatistikler yüklenirken hata oluştu:', error)
-        } finally {
-            setLoading(false)
-        }
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+        )
     }
 
     return (
@@ -119,7 +94,7 @@ export default function SubjectStatisticsPage() {
                 <div className="bg-white p-6 rounded-xl border border-gray-200">
                     <h3 className="text-sm font-medium text-gray-500">Tamamlanan Quiz</h3>
                     <p className="text-2xl font-semibold text-gray-900 mt-2">
-                        {statistics.reduce((acc, stat) => acc + stat.completed_quizzes, 0)}
+                        {statistics.reduce((acc, stat) => acc + stat.completed_topics, 0)}
                     </p>
                 </div>
             </div>
@@ -134,16 +109,13 @@ export default function SubjectStatisticsPage() {
                                     Ders
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Tamamlanan / Toplam Quiz
+                                    Tamamlanan / Toplam Konu
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Başarı Oranı
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Toplam Deneme
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Son Deneme
+                                    Son Aktivite
                                 </th>
                             </tr>
                         </thead>
@@ -154,7 +126,7 @@ export default function SubjectStatisticsPage() {
                                         {stat.subject_name}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {stat.completed_quizzes} / {stat.total_quizzes}
+                                        {stat.completed_topics} / {stat.total_topics}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
@@ -171,11 +143,8 @@ export default function SubjectStatisticsPage() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {stat.total_attempts}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {stat.last_attempt_at !== '-'
-                                            ? new Date(stat.last_attempt_at).toLocaleDateString('tr-TR')
+                                        {stat.last_activity !== '-'
+                                            ? new Date(stat.last_activity).toLocaleDateString('tr-TR')
                                             : '-'
                                         }
                                     </td>

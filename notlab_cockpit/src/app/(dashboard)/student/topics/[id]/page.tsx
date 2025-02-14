@@ -77,6 +77,31 @@ type ActiveContent = {
     id: string
 }
 
+type Progress = {
+    subjects: {
+        [subject_id: string]: {
+            units: {
+                [unit_id: string]: {
+                    topics: {
+                        [topic_id: string]: {
+                            is_read: boolean;
+                            is_completed: boolean;
+                            completed_at?: string;
+                            last_read_at: string;
+                            correct_answers?: number;
+                            total_questions?: number;
+                            completed_quizzes?: string[];
+                        }
+                    };
+                    completed_topics: number;
+                    total_topics: number;
+                }
+            };
+        }
+    };
+    last_activity: string | null;
+}
+
 export default function TopicDetail({ params }: { params: Promise<{ id: string }> }) {
     const resolvedParams = use(params)
     const [topic, setTopic] = useState<Topic | null>(null)
@@ -91,6 +116,13 @@ export default function TopicDetail({ params }: { params: Promise<{ id: string }
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
     const [userAnswers, setUserAnswers] = useState<Record<string, string>>({})
     const [showResults, setShowResults] = useState(false)
+    const [progress, setProgress] = useState<{
+        is_read: boolean;
+        is_completed: boolean;
+    }>({
+        is_read: false,
+        is_completed: false
+    });
 
     useEffect(() => {
         // Auth state değişikliklerini dinle
@@ -201,9 +233,16 @@ export default function TopicDetail({ params }: { params: Promise<{ id: string }
 
     // Quiz'e tıklandığında çağrılacak fonksiyon
     const handleQuizClick = async (quiz: Quiz) => {
+        // State'leri sıfırla
+        setShowResults(false)
+        setUserAnswers({})
+        setCurrentQuestionIndex(0)
+
+        // Yeni quiz'i ayarla
         setActiveContent({ type: 'quiz', id: quiz.id })
         setActiveQuiz(quiz)
 
+        // Quiz sorularını yükle
         const { data: quizQuestionsData } = await supabase
             .from('quiz_questions')
             .select('*')
@@ -231,8 +270,6 @@ export default function TopicDetail({ params }: { params: Promise<{ id: string }
             })
 
             setQuizQuestions(formattedQuestions)
-            setCurrentQuestionIndex(0)
-            setUserAnswers({})
         }
     }
 
@@ -304,9 +341,20 @@ export default function TopicDetail({ params }: { params: Promise<{ id: string }
                 console.log('Insert Error:', insertError)
             }
 
+            // Quiz başarıyla tamamlandıysa progress'i güncelle
+            await updateProgress(true, true);
+
             // Başarı oranını göster
             const successRate = Math.round((score / quizQuestions.length) * 100)
             alert(`Quiz tamamlandı!\nSkorunuz: ${score}/${quizQuestions.length}\nBaşarı Oranı: %${successRate}`)
+
+            // Quiz tamamlandıktan sonra progress'i tekrar yükle
+            await loadProgress();
+
+            // Quiz tamamlandıktan 2 saniye sonra sonuçları gizle
+            setTimeout(() => {
+                setShowResults(false)
+            }, 2000)
 
         } catch (error) {
             console.error('Quiz istatistikleri güncellenirken hata oluştu:', error)
@@ -321,6 +369,155 @@ export default function TopicDetail({ params }: { params: Promise<{ id: string }
             [questionId]: answer
         }))
     }
+
+    // Progress'i yükle
+    const loadProgress = async () => {
+        if (!topic?.id || !topic.units?.subject_id) return;
+
+        const session = JSON.parse(localStorage.getItem('session') || '{}')
+        const user = session?.user
+
+        if (!user?.id) return;
+
+        // Progress bilgisini profiles tablosundan al
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('progress')
+            .eq('id', user.id)
+            .single();
+
+        // Topic progress bilgisini JSONB'den çek
+        const topicProgress = profile?.progress?.subjects?.[topic.units.subject_id]
+            ?.units?.[topic.unit_id]?.topics?.[topic.id];
+
+        if (topicProgress) {
+            setProgress({
+                is_read: topicProgress.is_read,
+                is_completed: topicProgress.is_completed
+            });
+        } else {
+            setProgress({
+                is_read: false,
+                is_completed: false
+            });
+        }
+    };
+
+    // Progress'i güncelle
+    const updateProgress = async (isRead: boolean = false, isCompleted: boolean = false) => {
+        const session = JSON.parse(localStorage.getItem('session') || '{}')
+        const user = session?.user
+
+        if (!user?.id || !topic?.id || !topic.units?.subject_id) return;
+
+        // Önce mevcut progress'i al
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('progress')
+            .eq('id', user.id)
+            .single();
+
+        // Mevcut topic progress'ini al
+        const currentTopicProgress = profile?.progress?.subjects?.[topic.units.subject_id]
+            ?.units?.[topic.unit_id]?.topics?.[topic.id] || {
+            is_read: false,
+            is_completed: false,
+            completed_quizzes: []
+        };
+
+        // Quiz tamamlandıysa quiz ID'sini kaydet
+        if (isCompleted && activeQuiz) {
+            currentTopicProgress.completed_quizzes = [
+                ...(currentTopicProgress.completed_quizzes || []),
+                activeQuiz.id
+            ];
+        }
+
+        // Konunun tamamen tamamlanıp tamamlanmadığını kontrol et
+        const hasQuizzes = topic.quizzes && topic.quizzes.length > 0;
+        const allQuizzesCompleted = hasQuizzes ?
+            topic.quizzes.every(quiz =>
+                currentTopicProgress.completed_quizzes?.includes(quiz.id)
+            ) : true;
+
+        // Konunun tamamlanma durumunu belirle
+        const isTopicCompleted = isRead && (!hasQuizzes || allQuizzesCompleted);
+
+        const currentProgress = profile?.progress || {
+            subjects: {},
+            last_activity: null
+        };
+
+        // Debug logları
+        console.log('Current Topic Progress:', currentTopicProgress);
+        console.log('Has Quizzes:', hasQuizzes);
+        console.log('Topic Quizzes:', topic.quizzes);
+        console.log('Completed Quizzes:', currentTopicProgress.completed_quizzes);
+        console.log('All Quizzes Completed:', allQuizzesCompleted);
+        console.log('Is Topic Completed:', isTopicCompleted);
+
+        const newProgress = {
+            ...currentProgress,
+            subjects: {
+                ...currentProgress.subjects,
+                [topic.units.subject_id]: {
+                    ...currentProgress.subjects?.[topic.units.subject_id],
+                    units: {
+                        ...currentProgress.subjects?.[topic.units.subject_id]?.units,
+                        [topic.unit_id]: {
+                            ...currentProgress.subjects?.[topic.units.subject_id]?.units?.[topic.unit_id],
+                            topics: {
+                                ...currentProgress.subjects?.[topic.units.subject_id]?.units?.[topic.unit_id]?.topics,
+                                [topic.id]: {
+                                    is_read: isRead,
+                                    is_completed: isTopicCompleted,
+                                    completed_at: isTopicCompleted ? new Date().toISOString() : undefined,
+                                    last_read_at: new Date().toISOString(),
+                                    completed_quizzes: currentTopicProgress.completed_quizzes || []
+                                }
+                            },
+                            completed_topics: Object.values(currentProgress.subjects?.[topic.units.subject_id]?.units?.[topic.unit_id]?.topics || {})
+                                .filter(t => t.is_completed).length + (isTopicCompleted ? 1 : 0),
+                            total_topics: unitTopics.length
+                        }
+                    }
+                }
+            },
+            last_activity: new Date().toISOString()
+        };
+
+        // Debug log
+        console.log('New Progress:', newProgress);
+
+        // Progress'i güncelle
+        const { data, error } = await supabase
+            .from('profiles')
+            .update({
+                progress: newProgress
+            })
+            .eq('id', user.id);
+
+        // Debug log
+        if (error) {
+            console.error('Progress Update Error:', error);
+        }
+
+        // State'i güncelle
+        setProgress({
+            is_read: isRead,
+            is_completed: isTopicCompleted
+        });
+    };
+
+    // Konu içeriği görüntülendiğinde
+    useEffect(() => {
+        if (topic?.id) {
+            loadProgress();
+            // Konuyu okundu olarak işaretle ve quiz yoksa tamamlandı olarak işaretle
+            const hasQuiz = topic.quizzes && topic.quizzes.length > 0;
+            updateProgress(true, !hasQuiz); // Quiz yoksa direkt tamamlandı olarak işaretle
+        }
+    }, [topic?.id]);
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -442,6 +639,18 @@ export default function TopicDetail({ params }: { params: Promise<{ id: string }
                                             </Link>
                                         </div>
                                     )}
+                                    <div className="flex items-center gap-2 mb-4">
+                                        {progress.is_read && (
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                Okundu
+                                            </span>
+                                        )}
+                                        {progress.is_completed && (
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                Tamamlandı
+                                            </span>
+                                        )}
+                                    </div>
                                 </>
                             ) : (
                                 // Quiz İçeriği
