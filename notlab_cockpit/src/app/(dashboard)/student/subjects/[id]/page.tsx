@@ -12,6 +12,7 @@ type Unit = {
     order_number: number
     _count?: {
         topics: number
+        quizzes: number
     }
 }
 
@@ -49,24 +50,28 @@ export default function SubjectDetail({ params }: { params: Promise<{ id: string
             setSubject(subjectData)
         }
 
-        // Üniteleri ve konu sayılarını yükle
+        // Üniteleri, konuları ve quizleri yükle
         const { data: unitsData } = await supabase
             .from('units')
             .select(`
                 *,
-                topics (
-                    count
+                topics!unit_id (
+                    id
+                ),
+                quizzes!unit_id (
+                    id
                 )
             `)
             .eq('subject_id', resolvedParams.id)
             .order('order_number', { ascending: true })
 
         if (unitsData) {
-            // Her ünitenin konu sayısını hesapla
+            // Her ünitenin konu ve quiz sayısını hesapla
             const unitsWithCounts = unitsData.map(unit => ({
                 ...unit,
                 _count: {
-                    topics: unit.topics?.length || 0
+                    topics: unit.topics?.length || 0,
+                    quizzes: unit.quizzes?.length || 0
                 }
             }))
             setUnits(unitsWithCounts)
@@ -156,11 +161,19 @@ export default function SubjectDetail({ params }: { params: Promise<{ id: string
                                         Araştırmacı Kunduz seni bu üniteyi keşfetmeye çağırıyor.
                                     </p>
                                 </div>
-                                <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-lg">
-                                    <Book className="w-4 h-4 text-blue-600" />
-                                    <span className="text-xs font-medium text-blue-600">
-                                        {unit._count?.topics || 0} Konu
-                                    </span>
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-lg">
+                                        <Book className="w-4 h-4 text-blue-600" />
+                                        <span className="text-xs font-medium text-blue-600">
+                                            {unit._count?.topics || 0} Konu
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 px-2 py-1 bg-purple-50 rounded-lg">
+                                        <FileText className="w-4 h-4 text-purple-600" />
+                                        <span className="text-xs font-medium text-purple-600">
+                                            {unit._count?.quizzes || 0} Quiz
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
